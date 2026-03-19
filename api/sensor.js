@@ -2,7 +2,6 @@
 // Proxy aman untuk mengambil data Apps Script secara server-to-server.
 
 const DEFAULT_TIMEOUT_MS = 12000;
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAdKpcEGI1rCO-nb4vIHtHI2qFl0mqXA6iUOdICmXH-RSjrR-_y3s4kfA8YCmLq1VH/exec?action=data';
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -12,7 +11,7 @@ module.exports = async (req, res) => {
     });
   }
 
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL || DEFAULT_SCRIPT_URL;
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL;
   if (!scriptUrl) {
     return res.status(500).json({
       success: false,
