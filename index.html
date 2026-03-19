@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Semai Bawang Bombai</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" defer></script>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <div class="bg-gradient"></div>
+
+    <main class="container">
+      <header class="hero glass-card">
+        <p class="hero-badge">Monitoring Fase Semai</p>
+        <h1>Dashboard Lingkungan Penyemaian <span>Bawang Bombai</span></h1>
+        <p class="hero-subtitle">
+          Visualisasi real-time parameter semai berbasis Google Sheet: suhu, kelembapan, lampu, fan,
+          serta analisis VPD, GDD, dan skor kondisi.
+        </p>
+        <div class="hero-meta">
+          <div>
+            <small>Update terakhir</small>
+            <strong id="last-update">-</strong>
+          </div>
+          <div>
+            <small>Refresh otomatis</small>
+            <strong>30 detik</strong>
+          </div>
+          <div>
+            <small>Status koneksi</small>
+            <strong id="connection-status">Menunggu...</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="summary-grid" id="summary-grid">
+        <article class="metric-card glass-card">
+          <h3>Suhu Terbaru</h3>
+          <p class="metric-value" id="latest-temp">-</p>
+          <small class="metric-note">Rentang ideal menyesuaikan siang/malam</small>
+        </article>
+        <article class="metric-card glass-card">
+          <h3>Kelembapan Terbaru</h3>
+          <p class="metric-value" id="latest-humidity">-</p>
+          <small class="metric-note">Target: 65% - 75%</small>
+        </article>
+        <article class="metric-card glass-card">
+          <h3>Status Lampu</h3>
+          <p class="metric-value" id="latest-lamp">-</p>
+          <small class="metric-note">Nyala / Mati</small>
+        </article>
+        <article class="metric-card glass-card">
+          <h3>Status Fan Udara</h3>
+          <p class="metric-value" id="latest-fan">-</p>
+          <small class="metric-note">Nyala / Mati</small>
+        </article>
+        <article class="metric-card glass-card">
+          <h3>VPD Terbaru</h3>
+          <p class="metric-value" id="latest-vpd">-</p>
+          <small class="metric-note">Ideal: 0.4 - 0.8 kPa</small>
+        </article>
+        <article class="metric-card glass-card">
+          <h3>GDD Terbaru</h3>
+          <p class="metric-value" id="latest-gdd">-</p>
+          <small class="metric-note">T<sub>base</sub>: 5°C</small>
+        </article>
+        <article class="metric-card glass-card score-card" id="score-card">
+          <h3>Skor Kondisi Terbaru</h3>
+          <p class="metric-value" id="latest-score">-</p>
+          <small class="metric-note" id="score-label">-</small>
+        </article>
+      </section>
+
+      <section class="status-strip glass-card">
+        <div class="status-item">
+          <span class="dot" id="score-dot"></span>
+          <div>
+            <h4>Status Kondisi</h4>
+            <p id="status-text">-</p>
+          </div>
+        </div>
+        <div class="status-item">
+          <h4>Akumulasi GDD</h4>
+          <p id="gdd-total">-</p>
+        </div>
+        <div class="status-item">
+          <h4>Risiko VPD</h4>
+          <p id="vpd-risk">-</p>
+        </div>
+      </section>
+
+      <section class="charts-grid">
+        <article class="glass-card chart-card">
+          <h3>Suhu vs Waktu</h3>
+          <canvas id="tempChart"></canvas>
+        </article>
+        <article class="glass-card chart-card">
+          <h3>Kelembapan vs Waktu</h3>
+          <canvas id="humidityChart"></canvas>
+        </article>
+        <article class="glass-card chart-card">
+          <h3>Status Lampu vs Waktu</h3>
+          <canvas id="lampChart"></canvas>
+        </article>
+        <article class="glass-card chart-card">
+          <h3>Status Fan Udara vs Waktu</h3>
+          <canvas id="fanChart"></canvas>
+        </article>
+      </section>
+
+      <section class="charts-grid analysis-grid">
+        <article class="glass-card chart-card">
+          <h3>VPD vs Waktu</h3>
+          <canvas id="vpdChart"></canvas>
+        </article>
+        <article class="glass-card chart-card">
+          <h3>GDD (Row) vs Waktu</h3>
+          <canvas id="gddChart"></canvas>
+        </article>
+        <article class="glass-card chart-card span-2">
+          <h3>Skor Kondisi vs Waktu</h3>
+          <canvas id="scoreChart"></canvas>
+        </article>
+      </section>
+
+      <section class="glass-card table-card">
+        <div class="section-head">
+          <h3>Data Terbaru</h3>
+          <p id="rows-count">0 baris</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Suhu (°C)</th>
+                <th>Kelembapan (%)</th>
+                <th>Lampu</th>
+                <th>Fan Udara</th>
+                <th>VPD (kPa)</th>
+                <th>GDD Row</th>
+                <th>Skor</th>
+              </tr>
+            </thead>
+            <tbody id="latest-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="glass-card analysis-note">
+        <h3>Keterangan Analisis</h3>
+        <p>
+          Data yang ditampilkan merupakan hasil analisis dari data sensor Google Sheet menggunakan rumus
+          VPD, GDD, dan evaluasi kedekatan terhadap kondisi optimum penyemaian bawang bombai fase semai.
+        </p>
+      </section>
+    </main>
+
+    <div id="state-overlay" class="state-overlay">
+      <div class="glass-card state-card">
+        <p id="state-message">Memuat data...</p>
+        <button id="retry-btn" class="btn" hidden>Coba Lagi</button>
+      </div>
+    </div>
+  </body>
+</html>
