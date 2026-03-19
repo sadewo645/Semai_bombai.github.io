@@ -1,4 +1,4 @@
-const SENSOR_API_ENDPOINT = '/api/sensor';
+const APPS_SCRIPT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbx_4_Tg1QJTNlYCuyVaI2w4L_jGWmoow9a9CG6T9BOtp7Mx47xSFgfHyjB5RCeN1kl4/exec';
 const REFRESH_MS = 30_000;
 const IDEAL = {
   dayTemp: [20, 25],
@@ -54,30 +54,20 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function loadData() {
-  const shouldBlockUI = state.records.length === 0;
-  if (shouldBlockUI) setState('loading', 'Memuat data sensor dari server...');
-
+  setState('loading', 'Memuat data dari Apps Script...');
   try {
-    const response = await fetch(SENSOR_API_ENDPOINT, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
+    const response = await fetch(APPS_SCRIPT_ENDPOINT, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const payload = await parseApiResponse(response);
-    if (!response.ok || !payload?.success) {
-      throw new Error(payload?.message || `Request gagal dengan status ${response.status}`);
-    }
+    const raw = await response.json();
+    if (!Array.isArray(raw)) throw new Error('Format JSON bukan array objek');
 
-    const rows = extractRows(payload);
-    const parsed = rows
+    const parsed = raw
       .map(parseRow)
       .filter(Boolean)
       .sort((a, b) => a.time - b.time);
 
-    if (!parsed.length) {
-      throw new Error('Data tersedia, tetapi tidak ada baris valid untuk ditampilkan.');
-    }
+    if (!parsed.length) throw new Error('Tidak ada data valid dari endpoint');
 
     state.records = parsed;
     renderDashboard(parsed);
@@ -86,63 +76,9 @@ async function loadData() {
     el.lastUpdate.textContent = new Date().toLocaleString('id-ID');
   } catch (error) {
     console.error(error);
-    const message = friendlyClientError(error);
-
-    // Jika sudah ada data lama, jangan tutup dashboard, hanya update status.
-    if (state.records.length > 0) {
-      el.connectionStatus.textContent = 'Terhubung (data terakhir ditahan)';
-      setState('ready');
-      el.stateMessage.textContent = message;
-      return;
-    }
-
-    setState('error', message);
+    setState('error', `Gagal mengambil data: ${error.message}`);
     el.connectionStatus.textContent = 'Gagal';
   }
-}
-
-async function parseApiResponse(response) {
-  const text = await response.text();
-  if (!text) return null;
-
-  const direct = safeJsonParse(text);
-  if (direct) return direct;
-
-  // fallback jika response dibungkus
-  const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-  if (jsonMatch) {
-    const fallback = safeJsonParse(jsonMatch[0]);
-    if (fallback) return fallback;
-  }
-
-  return { success: false, message: 'Response server bukan JSON yang valid.' };
-}
-
-function extractRows(payload) {
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.values)) return payload.values;
-  if (Array.isArray(payload?.rows)) return payload.rows;
-  if (Array.isArray(payload)) return payload;
-  return [];
-}
-
-function friendlyClientError(error) {
-  const message = String(error?.message || '').toLowerCase();
-
-  if (message.includes('403')) {
-    return 'Akses ke Apps Script ditolak (403). Pastikan deployment Apps Script publik (Execute as: Me, Who has access: Anyone).';
-  }
-  if (message.includes('404')) {
-    return 'Endpoint data tidak ditemukan (404). Periksa URL Apps Script pada environment Vercel.';
-  }
-  if (message.includes('timeout') || message.includes('network') || message.includes('failed to fetch')) {
-    return 'Koneksi ke server data gagal. Periksa internet atau coba lagi beberapa saat.';
-  }
-  if (message.includes('json')) {
-    return 'Format data dari server tidak valid. Pastikan Apps Script mengembalikan JSON array.';
-  }
-
-  return `Gagal mengambil data sensor: ${error.message || 'Terjadi kesalahan tidak diketahui.'}`;
 }
 
 function parseRow(row) {
@@ -158,6 +94,7 @@ function parseRow(row) {
   const vpsat = 0.61078 * Math.exp((17.27 * temp) / (temp + 237.3));
   const vpair = vpsat * (humidity / 100);
   const vpd = vpsat - vpair;
+
   const gddRow = Math.max(0, temp - 5);
 
   const tempRange = isDay(time) ? IDEAL.dayTemp : IDEAL.nightTemp;
@@ -166,7 +103,17 @@ function parseRow(row) {
   const vpdScore = rangeScore(vpd, IDEAL.vpd[0], IDEAL.vpd[1]);
   const score = clamp(0.45 * tempScore + 0.35 * humidityScore + 0.2 * vpdScore, 0, 100);
 
-  return { time, label: formatTime(time), temp, humidity, lampOn, fanOn, vpd, gddRow, score };
+  return {
+    time,
+    label: formatTime(time),
+    temp,
+    humidity,
+    lampOn,
+    fanOn,
+    vpd,
+    gddRow,
+    score,
+  };
 }
 
 function renderDashboard(rows) {
@@ -228,10 +175,19 @@ function createCharts() {
 function updateCharts(rows) {
   const labels = rows.map((row) => row.label);
 
-  setChart('tempChart', labels, [lineDataset('Suhu (°C)', rows.map((r) => r.temp), '#38bdf8')]);
-  setChart('humidityChart', labels, [lineDataset('Kelembapan (%)', rows.map((r) => r.humidity), '#22d3ee')]);
-  setChart('lampChart', labels, [barDataset('Lampu', rows.map((r) => (r.lampOn ? 1 : 0)), '#7c83ff')]);
-  setChart('fanChart', labels, [barDataset('Fan Udara', rows.map((r) => (r.fanOn ? 1 : 0)), '#ef5da8')]);
+  setChart('tempChart', labels, [
+    lineDataset('Suhu (°C)', rows.map((r) => r.temp), '#38bdf8'),
+  ]);
+  setChart('humidityChart', labels, [
+    lineDataset('Kelembapan (%)', rows.map((r) => r.humidity), '#22d3ee'),
+  ]);
+
+  setChart('lampChart', labels, [
+    barDataset('Lampu', rows.map((r) => (r.lampOn ? 1 : 0)), '#7c83ff'),
+  ]);
+  setChart('fanChart', labels, [
+    barDataset('Fan Udara', rows.map((r) => (r.fanOn ? 1 : 0)), '#ef5da8'),
+  ]);
 
   setChart('vpdChart', labels, [
     lineDataset('VPD (kPa)', rows.map((r) => r.vpd), '#f59e0b'),
@@ -241,7 +197,9 @@ function updateCharts(rows) {
     lineDataset('GDD Row', rows.map((r) => r.gddRow), '#60a5fa'),
     lineDataset('Akumulasi GDD', cumulative(rows.map((r) => r.gddRow)), '#a78bfa'),
   ]);
-  setChart('scoreChart', labels, [areaDataset('Skor Kondisi', rows.map((r) => r.score))]);
+  setChart('scoreChart', labels, [
+    areaDataset('Skor Kondisi', rows.map((r) => r.score)),
+  ]);
 }
 
 function setChart(id, labels, datasets) {
@@ -299,7 +257,12 @@ function lineDataset(label, data, color, dashed = false) {
 }
 
 function barDataset(label, data, color) {
-  return { label, data, backgroundColor: color, borderRadius: 6 };
+  return {
+    label,
+    data,
+    backgroundColor: color,
+    borderRadius: 6,
+  };
 }
 
 function areaDataset(label, data) {
@@ -368,14 +331,6 @@ function cumulative(values) {
 
 function clamp(num, min, max) {
   return Math.min(max, Math.max(min, num));
-}
-
-function safeJsonParse(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
 }
 
 function setState(mode, message = '') {
